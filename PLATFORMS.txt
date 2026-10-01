@@ -1,0 +1,6 @@
+Platform support:
+- Ubuntu/Debian: install.sh (Nginx + PHP-FPM + Tor)
+- Termux/Android: termux/setup.sh (Nginx + PHP-FPM + Tor + runit services)
+- Windows Server: WINDOWS.md (IIS + PHP FastCGI + Tor Expert Bundle)
+
+See README.md for caveats; Termux is not a reliable 24/7 production host, and Nginx for Windows is beta/limited. The Windows guide therefore uses IIS.

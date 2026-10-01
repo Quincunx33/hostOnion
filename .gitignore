@@ -1,0 +1,22 @@
+# Local state, secrets, logs, and generated runtime files
+.env
+.env.*
+!.env.example
+*.log
+*.pid
+*.sock
+*.key
+*.pem
+tor_data/
+tor-data/
+hidden_service/
+private_key
+hostname
+
+# Local deployment data
+.php/
+.nginx/
+.DS_Store
+Thumbs.db
+__pycache__/
+*.py[cod]
