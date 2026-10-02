@@ -110,6 +110,67 @@ When Tor is ready, you will see output similar to:
 
 Press `Ctrl+C` to stop PHP and Tor cleanly.
 
+## Platform installers
+
+HostOnion includes separate setup paths for different environments:
+
+| Environment | Setup | Recommended use |
+| --- | --- | --- |
+| Ubuntu/Debian server | [`install.sh`](install.sh) | Nginx + PHP-FPM + Tor deployment |
+| Termux/Android | [`termux/setup.sh`](termux/setup.sh) | Personal hosting and experiments |
+| Windows Server | [`WINDOWS.md`](WINDOWS.md) | IIS + PHP FastCGI + Tor Expert Bundle |
+| Any Unix-like system | [`hostonion.py`](hostonion.py) | Simple PHP/demo launcher |
+
+### Ubuntu/Debian: `install.sh`
+
+Use the production-style installer as root with the site's **public/document root**:
+
+```bash
+chmod 700 install.sh
+sudo ./install.sh /path/to/site-public-directory
+```
+
+The installer:
+
+1. Installs Nginx, Tor, PHP-FPM, PHP CLI, and `rsync`.
+2. Copies the site into `/var/www/hostonion/public`.
+3. Removes stale deployed files so the document root mirrors the source.
+4. Configures Nginx on `127.0.0.1:8080` only.
+5. Configures a Tor v3 onion service on port 80.
+6. Applies basic PHP, file-permission, security-header, and log-rotation settings.
+7. Validates Nginx and Tor configuration before starting the services.
+8. Prints the generated `.onion` URL after the hostname is available.
+
+The installer creates timestamped backups of managed configuration files. Keep the Tor identity directory private:
+
+```text
+/var/lib/tor/hostonion/
+```
+
+> **Important:** `install.sh` uses `rsync --delete` for the deployed document root. Files that exist only in `/var/www/hostonion/public` are removed on the next installation. Back up any server-side changes before rerunning it.
+
+View service status and logs with:
+
+```bash
+systemctl status tor nginx php*-fpm
+journalctl -u tor -u nginx
+tail -f /var/log/nginx/hostonion.error.log
+```
+
+### Termux/Android
+
+For Termux, use [`termux/setup.sh`](termux/setup.sh) instead of the Ubuntu installer:
+
+```bash
+bash termux/setup.sh /path/to/site-public-directory
+```
+
+Android battery management and process suspension can interrupt services. Treat this as a best-effort personal host, not a dependable 24/7 server.
+
+### Windows Server
+
+Follow [`WINDOWS.md`](WINDOWS.md) for IIS + PHP FastCGI + Tor Expert Bundle setup. The Windows guide is intentionally manual so that service accounts, firewall rules, permissions, and service supervision can be reviewed before deployment.
+
 ### 3. Host multiple sites
 
 ```bash
