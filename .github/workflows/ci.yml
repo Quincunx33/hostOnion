@@ -33,7 +33,7 @@ jobs:
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
       - name: Check shell syntax
-        run: bash -n install.sh termux/setup.sh
+        run: bash -n install.sh termux/setup.sh tests/tor_php_smoke.sh
 
   php-lint:
     name: PHP syntax
@@ -48,3 +48,17 @@ jobs:
           coverage: none
       - name: Lint demo PHP files
         run: find demo_site -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+  tor-php-demo:
+    name: Tor + PHP onion-service smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Install Tor and PHP CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tor php-cli curl
+      - name: Start demo PHP site and Tor v3 onion service
+        run: bash tests/tor_php_smoke.sh
