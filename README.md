@@ -4,6 +4,10 @@
 
 <div align="center">
 
+<img src="assets/hero.png" alt="HostOnion Tor hosting" width="100%">
+
+<br>
+
 <img src="https://img.shields.io/badge/Tor-v3%20Onion%20Service-7d4698?style=for-the-badge&logo=torproject&logoColor=white" alt="Tor v3"> <img src="https://img.shields.io/badge/PHP-8%2B-777BB4?style=for-the-badge&logo=php&logoColor=white" alt="PHP 8+"> <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.9+"> <img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge" alt="MIT License">
 
 **Loopback PHP server** &nbsp;•&nbsp; **Tor hidden service** &nbsp;•&nbsp; **Security-conscious runtime**
