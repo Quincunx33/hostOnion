@@ -1,68 +1,112 @@
 # HostOnion
 
-Host PHP websites as **Tor v3 onion services** with a single Python launcher.
+### Host PHP sites privately over Tor — from one command.
 
-> **Status:** HostOnion is a practical personal/demo hosting tool. Review and harden your PHP application before using it for production workloads.
+<div align="center">
 
-## Features
+<img src="https://img.shields.io/badge/Tor-v3%20Onion%20Service-7d4698?style=for-the-badge&logo=torproject&logoColor=white" alt="Tor v3"> <img src="https://img.shields.io/badge/PHP-8%2B-777BB4?style=for-the-badge&logo=php&logoColor=white" alt="PHP 8+"> <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.9+"> <img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge" alt="MIT License">
 
-- Host one or multiple PHP sites over Tor
-- Automatically creates Tor v3 onion services
-- Keeps PHP bound to `127.0.0.1`; the public endpoint is Tor-only
-- Automatic PHP process restart with backoff and restart limits
-- Site and port validation
-- Refuses system paths such as `/etc`, `/proc`, `/root`, and `/var/log`
-- Hidden-service directory, private-key, PID, log, and `torrc` permission hardening
-- Single-instance lock to prevent conflicting Tor/PHP processes
-- Tor bootstrap and local HTTP health checks
-- Onion identity reset and backup restore
-- Status, verbose logging, clipboard copy, and multi-site configuration support
+**Loopback PHP server** &nbsp;•&nbsp; **Tor hidden service** &nbsp;•&nbsp; **Security-conscious runtime**
 
-## Requirements
+</div>
 
-- Linux or another Unix-like system with process-group and file-lock support
-- Python 3.9+
-- PHP CLI (`php`)
-- Tor (`tor`) version 0.4.6 or newer
-- Optional: `pyperclip` for `--copy`
+---
 
-### Ubuntu/Debian
+## What is HostOnion?
+
+HostOnion turns a PHP website into a Tor v3 onion service without exposing the PHP server directly to the public network. PHP stays bound to `127.0.0.1`; Tor publishes the onion endpoint.
+
+It is designed for personal hosting, private demos, labs, and privacy-focused experiments. For production workloads, review the application and use a hardened PHP-FPM plus nginx/Caddy deployment where appropriate.
+
+## Demo
+
+The included demo site is a tiny PHP application with a homepage and a health endpoint. It was tested successfully with PHP 8.3:
+
+<div align="center">
+
+![HostOnion demo site screenshot](assets/demo-site.webp)
+
+<sub>Demo output: PHP is running successfully behind the HostOnion launcher.</sub>
+
+</div>
+
+### Run the demo
+
+```bash
+sudo apt update
+sudo apt install -y python3 php-cli tor
+
+chmod 700 hostonion.py
+./hostonion.py demo_site --verbose
+```
+
+The launcher prints the generated onion address when Tor finishes bootstrapping. To test the included endpoint locally:
+
+```bash
+php -S 127.0.0.1:8080 -t demo_site
+curl http://127.0.0.1:8080/health.php
+# OK
+```
+
+## Why HostOnion?
+
+| Capability | Included |
+| --- | :---: |
+| Tor v3 onion service generation | Yes |
+| PHP loopback binding | Yes |
+| Single-site and multi-site hosting | Yes |
+| Automatic PHP restart with backoff | Yes |
+| Local HTTP health check | Yes |
+| Tor bootstrap timeout handling | Yes |
+| Site-name and port validation | Yes |
+| Single-instance file lock | Yes |
+| Private runtime permission hardening | Yes |
+| Onion identity backup and restore | Yes |
+| Status and verbose logging | Yes |
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Visitor using Tor Browser] --> B[Tor v3 Onion Service]
+    B --> C[127.0.0.1 PHP server]
+    C --> D[Your PHP site]
+```
+
+The public-facing path is:
+
+```text
+Tor Browser → .onion address → Tor → 127.0.0.1:local-port → PHP site
+```
+
+## Quick start
+
+### 1. Install dependencies
 
 ```bash
 sudo apt update
 sudo apt install -y python3 php-cli tor
 ```
 
-## Quick start
+HostOnion requires Python 3.9+, PHP CLI, and Tor 0.4.6 or newer. `pyperclip` is optional and is only needed for `--copy`.
 
-Make the launcher executable and host a PHP site:
+### 2. Host a site
 
 ```bash
 chmod 700 hostonion.py
 ./hostonion.py /path/to/your/site --verbose
 ```
 
-The launcher starts PHP on a loopback port, starts Tor, waits for the Tor bootstrap, and prints the onion URL:
+When Tor is ready, you will see output similar to:
 
 ```text
 [+] default      → http://xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.onion
+[+] PHP auto-restart: enabled (max 5/60s)
 ```
 
 Press `Ctrl+C` to stop PHP and Tor cleanly.
 
-### Continue after a Tor bootstrap timeout
-
-Use `--force` only when you understand that Tor may not be reachable yet:
-
-```bash
-./hostonion.py /path/to/your/site --force
-```
-
-A generated hostname does not guarantee that the onion service is reachable until Tor has fully bootstrapped.
-
-## Multi-site hosting
-
-Pass a repeated `name=path` argument:
+### 3. Host multiple sites
 
 ```bash
 ./hostonion.py \
@@ -71,9 +115,11 @@ Pass a repeated `name=path` argument:
   --verbose
 ```
 
-Site names may contain 1–64 ASCII letters, numbers, `_`, and `-` characters. Each site receives its own onion identity and a separate local PHP port.
+Each site receives its own local port and onion identity. Site names may contain 1–64 ASCII letters, numbers, `_`, and `-` characters.
 
-You can also use a `hostonion.toml` file next to `hostonion.py`:
+## Configuration
+
+Create `hostonion.toml` next to `hostonion.py` when you want persistent settings:
 
 ```toml
 verbose = true
@@ -103,55 +149,61 @@ port = 9001
 # Show the current PID and known onion hostnames
 ./hostonion.py --status
 
-# Copy onion URLs to the clipboard when pyperclip is available
+# Copy onion URLs when pyperclip is available
 ./hostonion.py /path/to/site --copy
 
 # Disable PHP auto-restart
 ./hostonion.py /path/to/site --no-restart
 ```
 
-## Demo site
-
-A minimal PHP demo is included in [`demo_site/`](demo_site/). Run it with:
-
-```bash
-./hostonion.py demo_site --verbose
-```
-
-The demo exposes:
-
-- `index.php` — displays a success message, PHP version, and UTC time
-- `health.php` — returns `OK` with HTTP 200
-
-For a temporary non-Tor preview only:
-
-```bash
-php -S 127.0.0.1:8080 -t demo_site
-curl http://127.0.0.1:8080/health.php
-```
-
-## Runtime files
+## Runtime layout
 
 The launcher stores runtime data beside the script in `tor/`:
 
-- `torrc` — generated Tor configuration
-- `hidden_service/` — onion identities and private keys
-- `hidden_service_backup/` — first-run backup of existing identities
-- `hostonion.log` — launcher log
-- `tor.log` — Tor log
-- `php_<site>.log` — verbose PHP output
+```text
+tor/
+├── torrc
+├── tor.log
+├── hostonion.log
+├── php_<site>.log
+├── hidden_service/
+└── hidden_service_backup/
+```
 
-Never commit `tor/`, private keys, onion hostnames, logs, or other runtime state. The repository `.gitignore` excludes common sensitive runtime files; review it before publishing a deployment directory.
+The hidden-service directory contains private keys. Never commit or share it. Runtime files, hostnames, keys, logs, and PID files are excluded by `.gitignore` where applicable.
 
 ## Security notes
 
-- The hidden-service directory contains private keys. Protect it with filesystem permissions and secure backups.
-- Do not place `.env` files, credentials, database dumps, source-control metadata, or logs inside a public site directory.
-- The PHP built-in server is intended for personal/demo use. For a production deployment, consider a carefully configured PHP-FPM plus nginx/Caddy stack bound to loopback.
+- Keep onion private keys in a protected directory and use secure backups.
+- Do not place `.env` files, credentials, database dumps, logs, or source-control metadata inside a public site directory.
+- The PHP built-in server is intended for personal/demo use; use PHP-FPM plus a carefully configured web server for production.
 - Tor does not fix application vulnerabilities. Audit authentication, uploads, sessions, CSRF, XSS, SQL injection, dependencies, and outbound requests.
-- An onion URL is reachable by anyone who knows it unless the application or Tor client authorization restricts access.
-- Keep Linux, PHP, Tor, and application dependencies patched.
+- Anyone who knows an onion address can connect unless the application or Tor client authorization restricts access.
+- Keep the OS, PHP, Tor, and application dependencies patched.
+
+## Project structure
+
+```text
+hostOnion/
+├── hostonion.py        # Main launcher
+├── demo_site/           # Minimal PHP demo
+├── assets/              # Project artwork and demo screenshot
+├── install.sh           # Ubuntu/Debian deployment helper
+├── termux/              # Termux setup helper
+├── WINDOWS.md           # Windows Server guide
+└── LICENSE              # MIT License
+```
+
+## Contributing
+
+Issues and pull requests are welcome. Please avoid committing private keys, onion hostnames, logs, credentials, or generated runtime state.
 
 ## License
 
-No license file is currently included. Add a license before redistributing this project.
+HostOnion is released under the **MIT License**. See [`LICENSE`](LICENSE) for the full text.
+
+<div align="center">
+
+Made for privacy-focused hosting experiments.
+
+</div>
