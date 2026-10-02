@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HostOnion v3.2 - Host PHP sites on Tor
+HostOnion - Host PHP sites on Tor
 Author: Tasfia (github.com/Quincunx33)
 """
 
