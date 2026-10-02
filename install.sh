@@ -12,6 +12,10 @@ readonly TOR_DROPIN="${TOR_DROPIN_DIR}/hostonion.conf"
 readonly TOR_CONFIG="/etc/tor/torrc"
 readonly HS_DIR="/var/lib/tor/hostonion"
 readonly LOGROTATE_CONFIG="/etc/logrotate.d/hostonion"
+readonly BACKUP_STAMP="$(date +%Y%m%d%H%M%S)"
+
+BACKED_UP_FILES=()
+CONFIG_WRITTEN=0
 
 usage() {
   echo "Usage: sudo $0 /path/to/public-site-directory" >&2
@@ -20,12 +24,39 @@ usage() {
 
 fail() { echo "[ERROR] $*" >&2; exit 1; }
 
+rollback() {
+  local status=$?
+  [[ "$status" -eq 0 || "$CONFIG_WRITTEN" -eq 0 ]] && return
+  echo "[WARN] Installation failed; restoring managed configuration backups..." >&2
+  local entry original backup
+  for entry in "${BACKED_UP_FILES[@]}"; do
+    original="${entry%%|*}"
+    backup="${entry#*|}"
+    if [[ -n "$backup" && -f "$backup" ]]; then
+      cp -a "$backup" "$original" || true
+    else
+      rm -f "$original" || true
+    fi
+  done
+  return "$status"
+}
+trap rollback EXIT
+
 [[ "$(id -u)" -eq 0 ]] || fail "Run this installer with sudo/root privileges."
 [[ $# -eq 1 ]] || { usage; exit 2; }
 [[ -d "$1" ]] || fail "Site directory does not exist: $1"
+command -v realpath >/dev/null || fail "The realpath command is required."
+command -v systemctl >/dev/null || fail "systemd/systemctl is required on this host."
 
 SITE_DIR="$(realpath "$1")"
 [[ "$SITE_DIR" != "$WEB_ROOT" ]] || fail "Source directory must not be the install destination."
+case "$SITE_DIR" in
+  /|/bin|/boot|/dev|/etc|/home|/lib|/lib64|/media|/mnt|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var)
+    fail "Refusing to deploy a system-level directory: $SITE_DIR" ;;
+esac
+[[ "$WEB_ROOT" != "$SITE_DIR"/* ]] || {
+  fail "The source directory must not contain the install destination: $WEB_ROOT"
+}
 [[ -f "$SITE_DIR/index.php" || -f "$SITE_DIR/index.html" ]] || {
   echo "[WARN] No index.php or index.html found. Continuing; confirm this is the intended document root." >&2
 }
@@ -37,7 +68,11 @@ apt-get install -y nginx tor php-fpm php-cli rsync
 
 command -v php >/dev/null || fail "PHP CLI was not installed."
 PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
-PHP_FPM_SERVICE="php${PHP_VERSION}-fpm"
+PHP_FPM_SERVICE="$(systemctl list-unit-files 'php*-fpm.service' --no-legend | awk 'NR == 1 {print $1}')"
+[[ -n "$PHP_FPM_SERVICE" ]] || fail "No PHP-FPM systemd service was found after installation."
+PHP_FPM_SERVICE="${PHP_FPM_SERVICE%.service}"
+PHP_FPM_VERSION="${PHP_FPM_SERVICE#php}"
+PHP_FPM_VERSION="${PHP_FPM_VERSION%-fpm}"
 systemctl enable --now "$PHP_FPM_SERVICE"
 getent passwd debian-tor >/dev/null || fail "The Debian/Ubuntu Tor service account (debian-tor) was not found."
 
@@ -45,13 +80,20 @@ getent passwd debian-tor >/dev/null || fail "The Debian/Ubuntu Tor service accou
 backup_if_present() {
   local file="$1"
   if [[ -f "$file" ]]; then
-    cp -a "$file" "${file}.hostonion-backup.$(date +%Y%m%d%H%M%S)"
+    local backup="${file}.hostonion-backup.${BACKUP_STAMP}"
+    cp -a "$file" "$backup"
+    BACKED_UP_FILES+=("$file|$backup")
+  else
+    BACKED_UP_FILES+=("$file|")
   fi
 }
 
 mkdir -p "$WEB_ROOT" "$TOR_DROPIN_DIR" "/etc/php/${PHP_VERSION}/fpm/conf.d"
-# Copy without deleting old deployed files. Review/remove stale files manually when publishing updates.
-rsync -a --safe-links "$SITE_DIR"/ "$WEB_ROOT"/
+# Mirror the source so deleted files do not remain exposed in the deployed document root.
+rsync -a --delete --safe-links \
+  --exclude='.git/' --exclude='.env' --exclude='.env.*' \
+  --exclude='*.key' --exclude='*.pem' --exclude='*.log' \
+  "$SITE_DIR"/ "$WEB_ROOT"/
 chown -hR root:www-data /var/www/hostonion
 find /var/www/hostonion -type d -exec chmod 0750 {} +
 find /var/www/hostonion -type f -exec chmod 0640 {} +
@@ -102,10 +144,14 @@ server {
         deny all;
     }
 
+    location ~* \.(?:conf|config|crt|key|pem|sh|sqlite|sqlite3|tmp)$ {
+        deny all;
+    }
+
     location ~ \.php$ {
         try_files \$uri =404;
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm.sock;
+        fastcgi_pass unix:/run/php/php${PHP_FPM_VERSION}-fpm.sock;
     }
 
     # Do not allow arbitrary files to be interpreted as PHP.
@@ -151,6 +197,9 @@ cat > "$LOGROTATE_CONFIG" <<'EOF'
 EOF
 chmod 0644 "$LOGROTATE_CONFIG"
 
+# All managed files now exist; validation or service startup failures can roll them back.
+CONFIG_WRITTEN=1
+
 # Validate before applying configuration.
 nginx -t
 if command -v tor >/dev/null 2>&1; then
@@ -159,7 +208,7 @@ fi
 
 systemctl enable --now nginx
 systemctl restart "$PHP_FPM_SERVICE"
-[[ -S "/run/php/php${PHP_VERSION}-fpm.sock" ]] || fail "Expected PHP-FPM socket was not created: /run/php/php${PHP_VERSION}-fpm.sock"
+[[ -S "/run/php/php${PHP_FPM_VERSION}-fpm.sock" ]] || fail "Expected PHP-FPM socket was not created: /run/php/php${PHP_FPM_VERSION}-fpm.sock"
 systemctl enable tor
 systemctl restart tor
 
